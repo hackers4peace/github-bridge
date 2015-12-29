@@ -1,0 +1,24 @@
+{
+  "repos": [
+    {
+      "source": "hackers4peace/github-bridge",
+      "uriSpace": "URI_SPACE_FOR_DESTINATION"
+    }
+  ],
+  "db": {
+    "cache": {
+      "level": "tmp/cache.db",
+      "fork": "tmp/cache.blob"
+    },
+    "lod": {
+      "level": "tmp/lod.db",
+      "fork": "tmp/lod.blob"
+    },
+    "mappings": {
+      "level": "tmp/mappings.db"
+    }
+  },
+  "api": {
+    "token": "GITHUB_TOKEN" 
+  }
+}
