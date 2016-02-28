@@ -1,5 +1,3 @@
-/* jshint asi: true */
-
 var uuid = require('node-uuid')
 
 var Resource = function () {
@@ -23,7 +21,7 @@ var repo = function (data, uriSpace) {
     id: uriSpace + uuid.v4(),
     type: 'Container',
     resource: project.id,
-    rel: "goal"
+    rel: 'goal'
   }
   doc['@graph'].push(goals)
 
