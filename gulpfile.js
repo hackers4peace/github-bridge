@@ -1,10 +1,8 @@
-/* jshint asi: true */
-
 var gulp = require('gulp')
 var level = require('level')
 var LevelPromise = require('level-promise')
 var forkdb = require('forkdb')
-var sprom = require('sprom')
+var fdbp = require('forkdb-promise')
 var fetch = require('github-fetch')
 var transform = require('./index')
 var config = require('./config.json')
@@ -22,85 +20,82 @@ gulp.task('fetch', function () {
     var repoUrl = prefix + 'repos/' + repo.source
     fetch(repoUrl, options).then(function (data) {
       console.log('fetched: ', repoUrl)
-      put(cache, data, repoUrl)
+      fdbp.put(cache, repoUrl, data)
     }).catch(function (err) {
-      console.log(err)
+      console.log('fetch repo', err)
     })
     var issuesUrl = prefix + 'repos/' + repo.source + '/issues'
     fetch(issuesUrl, options).then(function (data) {
       console.log('fetched: ', issuesUrl)
-      put(cache, data, issuesUrl)
+      fdbp.put(cache, issuesUrl, data)
     }).catch(function (err) {
-      console.log(err)
+      console.log('fetch issues', err)
     })
   })
 })
 
-gulp.task('process', function () {
-  config.repos.map(function (repo) {
+function ghRepoUrl (repo) {
+  return prefix + 'repos/' + repo.source
+}
+
+function ghIssuesUrl (repo) {
+  return prefix + 'repos/' + repo.source + '/issues'
+}
+
+function processRepo (repo) {
+  var ghRepo
+  var repold
+  return fdbp.get(cache, ghRepoUrl(repo)).then(function (string) {
+    ghRepo = JSON.parse(string)
+    return mappings.get(ghRepo.id)
+  }).then(function (url) {
+      // TODO
+  }, function (err) {
+    if (err.type === 'NotFoundError') {
+      repold = transform.repo(ghRepo, repo.uriSpace)
+      var repoUri = repold['@graph'][0].id.replace('#id', '')
+      return fdbp.put(lod, repoUri, JSON.stringify(repold))
+    } else {
+      return Promise.reject(err)
+    }
+  }).then(function () {
+    return processIssues(repo)
+  }).then(function (containerMembers) {
     var container = new transform.Resource()
-    var issues
-    var repoUrl = prefix + 'repos/' + repo.source
-    get(cache, repoUrl).then(function (data) {
-      mappings.get(data.id).catch(function (err) {
-        if (err.type === 'NotFoundError') {
-          var repold = transform.repo(data, repo.uriSpace)
-          put(lod, repold, repold['@graph'][0].id.replace('#id', ''))
-          issues = repold['@graph'][1] // FIXME
-          issues.item = []
-          var issuesUrl = prefix + 'repos/' + repo.source + '/issues'
-          get(cache, issuesUrl).then(function (data) {
-            return Promise.all(data.map(function (issue) {
-              var repold = transform.issue(issue, repo.uriSpace)
-              var uri = repold['@graph'][0].id.replace('#id', '') // FIXME
-              put(lod, repold, uri)
-              issues.item.push(uri)
-            })).then(function () {
-              container['@graph'].push(issues)
-              put(lod, container, issues.id)
-            })
-          }).catch(function (err) {
-            console.log(err)
-          })
-        }
-      })
+    var tasks = repold['@graph'][1] // FIXME
+    tasks['ldp:memeber'] = containerMembers
+    container['@graph'].push(tasks)
+    return fdbp.put(lod, tasks.id, JSON.stringify(container))
+  })
+}
+
+function processIssues (repo) {
+  var containerMembers = []
+  return fdbp.get(cache, ghIssuesUrl(repo))
+    .then(function (string) {
+      var ghIssues = JSON.parse(string)
+      return Promise.all(ghIssues.map(function (ghIssue) {
+        var taskld = transform.task(ghIssue, repo.uriSpace)
+        var taskUri = taskld['@graph'][0].id // FIXME
+        containerMembers.push(taskUri)
+        var resourceUri = taskUri.replace('#id', '') // FIXME
+        return fdbp.put(lod, resourceUri, JSON.stringify(taskld))
+      }))
+    }).then(function (hashes) {
+      return Promise.resolve(containerMembers)
+    })
+}
+
+gulp.task('process', function (done) {
+  Promise.all(config.repos.map(processRepo))
+    .then(function (hashes) {
+      console.log(hashes)
+      done()
     }).catch(function (err) {
       console.log(err)
+      done()
     })
-  })
 })
 
 gulp.task('publish', function () {
 })
-
-function get (db, uri) {
-  return sprom.arr(db.forks(uri))
-    .then(function (hashes) {
-      return sprom.buf(db.createReadStream(hashes[0].hash))
-    }).then(function (doc) {
-      // FIXME
-      return JSON.parse(JSON.parse(doc.toString()))
-    })
-}
-
-function put (db, doc, uri) {
-  console.log('saving: ', uri)
-  return sprom.arr(db.forks(uri))
-    .then(function (hashes) {
-      return Promise.resolve(hashes[0])
-    }).then(function (prev) {
-      var meta = { key: uri }
-      if (prev) meta.prev = prev
-      // return sprom.end(db.createWriteStream(meta).end(JSON.stringify(doc)))
-      // FIXME
-      var w = db.createWriteStream(meta, function (err, hash) {
-        if (err) console.log(err)
-        else console.log('write', hash)
-      })
-      w.end(JSON.stringify(doc))
-    }).then(function (hash) {
-      console.log('imported: ' + uri + ' as ' + hash)
-    }).catch(function (err) {
-      console.error(err.stack || err.message || err)
-    })
-}

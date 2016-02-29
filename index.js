@@ -1,7 +1,16 @@
 var uuid = require('node-uuid')
 
 var Resource = function () {
-  this['@context'] = 'https://w3id.org/plp/v1'
+  this['@context'] = {
+    '@vocab': 'http://schema.org/',
+    'id': '@id',
+    'type': '@type',
+    'ldp': 'http://www.w3.org/ns/ldp#',
+    'flow': 'http://www.w3.org/2005/01/wf/flow#',
+    'resource': 'ldp:membershipResource',
+    'rel': 'ldp:hasMemberRelation',
+    'rev': 'ldp:isMemberOfRelation'
+  }
   this['@graph'] = []
 }
 
@@ -9,36 +18,36 @@ var repo = function (data, uriSpace) {
   var uri = uriSpace + uuid.v4() + '#id'
   var doc = new Resource()
 
-  var project = {
+  var sourceCode = {
     id: uri,
-    type: 'Project',
+    type: [ 'CreativeWork', 'SoftwareSourceCode' ],
     name: data.name,
     description: data.description
   }
-  doc['@graph'].push(project)
+  doc['@graph'].push(sourceCode)
 
-  var goals = {
+  var tasks = {
     id: uriSpace + uuid.v4(),
-    type: 'Container',
-    resource: project.id,
-    rel: 'goal'
+    type: 'ldp:IndirectContainer',
+    resource: sourceCode.id,
+    rel: 'flow:task'
   }
-  doc['@graph'].push(goals)
+  doc['@graph'].push(tasks)
 
   return doc
 }
 
-var issue = function (data, uriSpace) {
+var task = function (data, uriSpace) {
   var uri = uriSpace + uuid.v4() + '#id'
   var doc = new Resource()
 
-  var goal = {
+  var task = {
     id: uri,
-    type: 'Goal',
+    type: 'flow:Task',
     name: data.title,
-    content: data.body
+    description: data.body
   }
-  doc['@graph'].push(goal)
+  doc['@graph'].push(task)
 
   return doc
 }
@@ -46,5 +55,5 @@ var issue = function (data, uriSpace) {
 module.exports = {
   Resource: Resource,
   repo: repo,
-  issue: issue
+  task: task
 }
