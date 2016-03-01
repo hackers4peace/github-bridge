@@ -15,7 +15,11 @@
     "level": "^1.4.0",
     "level-promise": "^2.1.0",
     "lodash": "^3.10.1",
-    "node-uuid": "^1.4.7"
+    "node-uuid": "^1.4.7",
+    "o-storage-forkdb": "0.0.1",
+    "o-utils-dataset": "0.0.1",
+    "rdf-parser-jsonld": "^0.3.0",
+    "simplerdf": "nicola/simplerdf"
   },
   "devDependencies": {
     "electron-prebuilt": "^0.36.9",
