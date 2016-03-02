@@ -83,24 +83,27 @@ function transformIssue (data, uri) {
   return parser.parse(doc)
 }
 
-// TODO add done() by using Promise.all
-gulp.task('fetch', () => {
-  config.repos.map((repo) => {
-    let repoUrl = prefix + 'repos/' + repo.source
-    fetch(repoUrl, options).then((data) => {
-      console.log('fetched: ', repoUrl)
-      fdbp.put(cache, repoUrl, data)
-    }).catch((err) => {
-      console.log('fetch repo', err)
-    })
-    let issuesUrl = prefix + 'repos/' + repo.source + '/issues'
-    fetch(issuesUrl, options).then((data) => {
-      console.log('fetched: ', issuesUrl)
-      fdbp.put(cache, issuesUrl, data)
-    }).catch((err) => {
-      console.log('fetch issues', err)
-    })
+function fetchRepoWithIssues (repo) {
+  let repoUrl = prefix + 'repos/' + repo.source
+  let issuesUrl = prefix + 'repos/' + repo.source + '/issues'
+  return fetch(repoUrl, options).then((data) => {
+    return fdbp.put(cache, repoUrl, data)
+  }).then(() => {
+    return fetch(issuesUrl, options)
+  }).then((data) => {
+    fdbp.put(cache, issuesUrl, data)
   })
+}
+
+gulp.task('fetch', (done) => {
+  Promise.all(config.repos.map(fetchRepoWithIssues))
+    .then(() => {
+      console.log('fetched ' + config.repos.length + ' repos')
+      done()
+    }).catch((err) => {
+      console.log(err)
+      done()
+    })
 })
 
 function ghRepoUrl (repo) {
@@ -183,7 +186,7 @@ function processIssues (repo) {
 
 gulp.task('process', (done) => {
   Promise.all(config.repos.map(processRepo))
-    .then((hashes) => {
+    .then(() => {
       console.log('processed ' + config.repos.length + ' repos')
       done()
     }).catch((err) => {
